@@ -4,19 +4,29 @@ using UnityEngine;
 
 public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 {
-	private string item, user, link, country;
-	private Vector3 direction;
-	private bool beingDestroyed = false;
+	private string item, user, link, country;	// The data set by Init()
+	private Vector3 direction;					// The direction the object is moving in
+
+	// The first frame the object was Start()ed
 	private float firstFrame;
 	public float FirstFrame {get {return firstFrame;}}
-	public AudioClip audioOnGazeTrigger, audioOnDestroy;
-	private AudioSource audioSource;
-	private bool selected = false;
-	static private bool objectSelected = false;
-	static private int objectCount = 0;
-	private float speed = 2f;
 
+	public AudioClip audioOnGazeTrigger, audioOnDestroy;	// AudioClips set in the editor
+	private AudioSource audioSource;						// Cached AudioSource component
 
+	static private bool isAnyObjectSelected = false;		// Are any DataVizObjects selected?
+	static private int allDataVizObjectCount = 0;			// Total count of DataVizObjects
+
+	// Object status flags
+	private bool isBeingDestroyed = false;
+	private bool isSelected = false;
+	private bool isLoaded = false;
+
+	public const float SelectedSpeed = 4f;		// Speed when selected
+	public const float Speed = 2f;				// Regular speed moving forward
+	private float speed = Speed;				// Current speed
+
+	// Called prior to Start()
 	public void Init (string _item, string _user, string _link, string _country)
 	{
 		item = _item;
@@ -25,12 +35,11 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 		country = _country;
 	}
 
+	// Start is a coroutine to allow for asynch loading
 	IEnumerator Start()
 	{
-		Debug.Log ("Start called " + item + user + link + country);
-
 		// Maximum objects allowed
-		if (objectCount+1 > 128) {
+		if (++allDataVizObjectCount > 4) {
 			DestroyObject (gameObject);
 			yield break;
 		}
@@ -43,7 +52,9 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 
 		// Prevent object rendering while still loading
 		gameObject.GetComponent<Renderer> ().enabled = false;
-		gameObject.GetComponentInChildren<Renderer>().enabled = false;	//TODO This doesn't work, the text appears in it's original position during load
+		//gameObject.GetComponentInChildren<Renderer>().enabled = false;	//TODO This doesn't work, the text appears in it's original position during load
+		TextMesh txtMesh = gameObject.GetComponentInChildren<TextMesh>();
+		txtMesh.GetComponent<Renderer> ().enabled = false;
 
 		// Load the wikipedia page
 		WWW wwwHtml= new WWW (link);
@@ -53,7 +64,7 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 		// Find "image" class
 		int index = text.IndexOf ("class=\"image\">");
 		if (index == -1) {
-			Debug.Log ("No image " + link);	//TODO placeholder texture
+			Debug.Log ("No image " + link);
 			goto no_image;
 		}
 
@@ -72,7 +83,6 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 
 		// Load the File: wikipedia page for the image
 		text = "https://en.wikipedia.org" + text;
-		Debug.LogError (text); //TODO not an error, just separating stream
 		wwwHtml.Dispose ();
 		wwwHtml = new WWW (text);
 		yield return wwwHtml;
@@ -112,8 +122,8 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 			// Load the image
 			text = text.Substring (1, index - 1);
 			text = "https:" + text;
-			Debug.LogError (text); //not an error, just separating stream
-			//TODO screen out GIFs
+			Debug.Log ("DOWNLOADING: " + text);
+			//TODO screen out GIFs?
 			wwwHtml.Dispose ();
 			wwwHtml = new WWW (text);
 			yield return wwwHtml;
@@ -155,7 +165,7 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 			// Load image
 			text = text.Substring (1, index - 1);
 			text = "https:" + text;
-			Debug.LogError (text); //not an error, just separating stream
+			Debug.Log ("DOWNLOADING: " + text);
 			//TODO screen out GIFs
 			wwwHtml.Dispose ();
 			wwwHtml = new WWW (text);
@@ -167,11 +177,10 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 		wwwHtml.Dispose ();
 
 		// And text as wiki update 'item'
-		TextMesh txtMesh = gameObject.GetComponentInChildren<TextMesh>();
 		txtMesh.text = item;
 	
 		// If an object is selected, hold-on or new ones will get in the way
-		yield return new WaitWhile (()=>objectSelected);
+		yield return new WaitWhile (()=>isAnyObjectSelected);
 
 		// Speak the item name
 		EasyTTSUtil.SpeechFlush (item);
@@ -185,10 +194,11 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 
 		// Re-enable rendering now loaded
 		gameObject.GetComponent<Renderer> ().enabled = true;
-		gameObject.GetComponentInChildren<Renderer>().enabled = true;
+		//gameObject.GetComponentInChildren<Renderer>().enabled = true;
+		txtMesh.GetComponent<Renderer> ().enabled = true;
 
-		// Made it, so up the static counter
-		objectCount++;
+		// Made it
+		isLoaded = true;
 		yield break;
 
 		// Something went wrong getting the image, so die
@@ -198,10 +208,13 @@ no_image:
 		
 	void Update ()
 	{
+		if (!isLoaded)	// Could still be loading
+			return;
+		
 		Vector3 v = gameObject.transform.position;
 
 		// If this object is selected, then move it toward the camera
-		if (selected) {
+		if (isSelected) {
 			if (Vector3.Distance (Camera.main.transform.position, v) > 1) {
 				v -= direction * (Time.deltaTime * speed);
 			}
@@ -218,57 +231,55 @@ no_image:
 	// Not being called
 	void OnTriggerEnter (Collider other)
 	{
+		if (!isLoaded)	// Could still be loading
+			return;
+
 		if (other.gameObject.name != "DataVizObject(Clone)") //yuk!
 			return;
 
 		// Unless near the end of journey, forget it
+		Vector3 v = Camera.main.transform.position;
 		if (Vector3.Distance (Camera.main.transform.position, transform.position) < 2.75f)
 			return;
 
 		// Destroy oldest object only
 		DataVizObject dvo = other.gameObject.GetComponent<DataVizObject> ();
 		if (firstFrame < dvo.FirstFrame) {
-			if (beingDestroyed)
+			if (isBeingDestroyed)
 				return;
 			dvo.audioSource.PlayOneShot (audioOnDestroy);
 			DestroyObject (gameObject);
-			beingDestroyed = true;
+			isBeingDestroyed = true;
 		} else {
-			if (dvo.beingDestroyed)
+			if (dvo.isBeingDestroyed)
 				return;
 			audioSource.PlayOneShot (dvo.audioOnDestroy);
 			DestroyObject (dvo.gameObject);
-			dvo.beingDestroyed = true;
-		}
-	}
-
-	void LateUpdate() {
-		// Support back button means quit convention
-		GvrViewer.Instance.UpdateState ();
-		if (GvrViewer.Instance.BackButtonPressed) {
-			Application.Quit ();
+			dvo.isBeingDestroyed = true;
 		}
 	}
 
 	// Keey count of all the objects
-	void OnDestroy () {
-		objectCount--;
+	void OnDestroy ()
+	{
+		allDataVizObjectCount--;
 	}
 
 	#region IGvrGazeResponder implementation
 
-	//TODO display close up (freezing others) on click
-
 	/// Called when the user is looking on a GameObject with this script,
 	/// as long as it is set to an appropriate layer (see GvrGaze).
 	public void OnGazeEnter() {
+
+		if (!isLoaded)	// Could still be loading
+			return;
 
 		// Only if object finished it's journey
 		if (Vector3.Distance (Camera.main.transform.position, transform.position) < 3)
 			return;
 
 		// And if nothing else selected
-		if (objectSelected)
+		if (isAnyObjectSelected)
 			return;	
 		
 		// Flag selected green and display the text details
@@ -281,6 +292,9 @@ no_image:
 	/// was already called.
 	public void OnGazeExit() {
 
+		if (!isLoaded || isAnyObjectSelected)	// Could still be loading, and must skip if selected
+			return;
+		
 		// Reset colour and text (may not be needed but not implemented a check)
 		GetComponent<Renderer>().material.color = Color.white;
 		TextMesh txtMesh = gameObject.GetComponentInChildren<TextMesh>();
@@ -290,26 +304,26 @@ no_image:
 	/// Called when the viewer's trigger is used, between OnGazeEnter and OnPointerExit.
 	public void OnGazeTrigger() {
 
-		// If some selected already, ignore
-		if (objectSelected)
-			return;	
+		if (!isLoaded || isAnyObjectSelected)	// Could still be loading, and must skip if selected
+			return;
 
-		// Play the sound effect and start the select corountine
+		// Play the sound effect and start the select coroutine
 		audioSource.PlayOneShot (audioOnGazeTrigger);
 		StartCoroutine (SelectObject());
 	}
 
+	// Coroutine for selecting an object (bring to front of camera, speak details)
 	private IEnumerator SelectObject ()
 	{
 		// Switch of collision while selected
 		BoxCollider collider = gameObject.GetComponent<BoxCollider> ();
 		collider.enabled = false;
-		selected = true;
+		isSelected = true;
 
 		// Zip forward and back
-		speed = 4;
+		speed = SelectedSpeed;
 
-		objectSelected = true;
+		isAnyObjectSelected = true;
 
 		// Display the text details
 		TextMesh txtMesh = gameObject.GetComponentInChildren<TextMesh>();
@@ -321,8 +335,8 @@ no_image:
 		// After a wait, turn back
 		yield return new WaitForSeconds (4);
 		txtMesh.text = item;
-		selected = false;
-		objectSelected = false;
+		isSelected = false;
+		isAnyObjectSelected = false;
 		collider.enabled = true;
 	}
 

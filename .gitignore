@@ -4,8 +4,6 @@
 /[Bb]uild/
 /[Bb]uilds/
 /Assets/AssetStoreTools*
-/Assets/EasyTTS/
-EasyTTS.meta
 /Assets/GoogleVR/
 GoogleVR.meta
 /Assets/Plugins/
