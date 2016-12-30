@@ -5,7 +5,7 @@
 - Each update creates a DataVizObject
 - Which parses the html for usable image files from Wikipedia
 - Display these images, plus some text, on quads moving away from the camera before stopping
-- These objects collide / destroy if end up overlapping when they stop
+- These objects avoid overlapping
 - Is a limit on number of such objects created
 - Gaze and click interactivity to select these updates, bringing in front of camera
 - EasyTTS provides text to speech for at least iOS to speak info from the Wikipedia updates
