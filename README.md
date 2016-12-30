@@ -8,4 +8,4 @@
 - These objects collide / destroy if end up overlapping when they stop
 - Is a limit on number of such objects created
 - Gaze and click interactivity to select these updates, bringing in front of camera
-- EasyTTS provdes text to speech for at least iOS to speak info from the Wikipedia updates
+- EasyTTS provides text to speech for at least iOS to speak info from the Wikipedia updates
