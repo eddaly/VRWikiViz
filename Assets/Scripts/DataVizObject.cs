@@ -14,7 +14,8 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 	public AudioClip audioOnGazeTrigger, audioOnDestroy;	// AudioClips set in the editor
 	private AudioSource audioSource;						// Cached AudioSource component
 
-	static private bool isAnyObjectSelected = false;		// Are any DataVizObjects selected?
+	static private DataVizObject objectSelected = null;		// Are any DataVizObjects selected?
+	private const int maxDataVizObjects = 64;				// Maximum objects allowed (else gets too crowded)
 	static private int allDataVizObjectCount = 0;			// Total count of DataVizObjects
 
 	// Object status flags
@@ -22,8 +23,8 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 	private bool isSelected = false;
 	private bool isLoaded = false;
 
-	public const float SelectedSpeed = 4f;		// Speed when selected
-	public const float Speed = 2f;				// Regular speed moving forward
+	private const float SelectedSpeed = 4f;		// Speed when selected
+	private const float Speed = 2f;				// Regular speed moving forward
 	private float speed = Speed;				// Current speed
 
 	// Called prior to Start()
@@ -39,7 +40,7 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 	IEnumerator Start()
 	{
 		// Maximum objects allowed
-		if (++allDataVizObjectCount > 4) {
+		if (++allDataVizObjectCount > maxDataVizObjects) {
 			DestroyObject (gameObject);
 			yield break;
 		}
@@ -52,7 +53,6 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 
 		// Prevent object rendering while still loading
 		gameObject.GetComponent<Renderer> ().enabled = false;
-		//gameObject.GetComponentInChildren<Renderer>().enabled = false;	//TODO This doesn't work, the text appears in it's original position during load
 		TextMesh txtMesh = gameObject.GetComponentInChildren<TextMesh>();
 		txtMesh.GetComponent<Renderer> ().enabled = false;
 
@@ -180,7 +180,7 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 		txtMesh.text = item;
 	
 		// If an object is selected, hold-on or new ones will get in the way
-		yield return new WaitWhile (()=>isAnyObjectSelected);
+		yield return new WaitWhile (()=>(objectSelected != null));
 
 		// Speak the item name
 		EasyTTSUtil.SpeechFlush (item);
@@ -228,10 +228,11 @@ no_image:
 		gameObject.transform.position = v;
 	}
 
-	// Not being called
 	void OnTriggerEnter (Collider other)
 	{
-		if (!isLoaded)	// Could still be loading
+		DataVizObject dvo = other.gameObject.GetComponent<DataVizObject> ();
+
+		if (!isLoaded || !dvo.isLoaded)	// Could still be loading
 			return;
 
 		if (other.gameObject.name != "DataVizObject(Clone)") //yuk!
@@ -243,17 +244,16 @@ no_image:
 			return;
 
 		// Destroy oldest object only
-		DataVizObject dvo = other.gameObject.GetComponent<DataVizObject> ();
 		if (firstFrame < dvo.FirstFrame) {
 			if (isBeingDestroyed)
 				return;
-			dvo.audioSource.PlayOneShot (audioOnDestroy);
+			dvo.audioSource.PlayOneShot (dvo.audioOnDestroy);
 			DestroyObject (gameObject);
 			isBeingDestroyed = true;
 		} else {
 			if (dvo.isBeingDestroyed)
 				return;
-			audioSource.PlayOneShot (dvo.audioOnDestroy);
+			audioSource.PlayOneShot (audioOnDestroy);
 			DestroyObject (dvo.gameObject);
 			dvo.isBeingDestroyed = true;
 		}
@@ -274,13 +274,13 @@ no_image:
 		if (!isLoaded)	// Could still be loading
 			return;
 
+		// If an object is selected, no need for more
+		if (objectSelected != null)
+			return;
+
 		// Only if object finished it's journey
 		if (Vector3.Distance (Camera.main.transform.position, transform.position) < 3)
 			return;
-
-		// And if nothing else selected
-		if (isAnyObjectSelected)
-			return;	
 		
 		// Flag selected green and display the text details
 		GetComponent<Renderer>().material.color = Color.green;
@@ -292,22 +292,27 @@ no_image:
 	/// was already called.
 	public void OnGazeExit() {
 
-		if (!isLoaded || isAnyObjectSelected)	// Could still be loading, and must skip if selected
+		if (!isLoaded)	// Could still be loading
 			return;
 		
-		// Reset colour and text (may not be needed but not implemented a check)
+		// If this is selected, no need for more
+		if (objectSelected == this)
+			return;
+		
+		// Reset colour and text
 		GetComponent<Renderer>().material.color = Color.white;
-		TextMesh txtMesh = gameObject.GetComponentInChildren<TextMesh>();
+		TextMesh txtMesh = gameObject.GetComponentInChildren<TextMesh> ();
 		txtMesh.text = item;
 	}
 
 	/// Called when the viewer's trigger is used, between OnGazeEnter and OnPointerExit.
 	public void OnGazeTrigger() {
 
-		if (!isLoaded || isAnyObjectSelected)	// Could still be loading, and must skip if selected
+		if (!isLoaded || objectSelected != null)	// Could still be loading, and must skip if selected
 			return;
 
-		// Play the sound effect and start the select coroutine
+		// Remove green highlight, play the sound effect and start the select coroutine
+		GetComponent<Renderer>().material.color = Color.white;
 		audioSource.PlayOneShot (audioOnGazeTrigger);
 		StartCoroutine (SelectObject());
 	}
@@ -323,7 +328,7 @@ no_image:
 		// Zip forward and back
 		speed = SelectedSpeed;
 
-		isAnyObjectSelected = true;
+		objectSelected = this;
 
 		// Display the text details
 		TextMesh txtMesh = gameObject.GetComponentInChildren<TextMesh>();
@@ -336,7 +341,7 @@ no_image:
 		yield return new WaitForSeconds (4);
 		txtMesh.text = item;
 		isSelected = false;
-		isAnyObjectSelected = false;
+		objectSelected = null;
 		collider.enabled = true;
 	}
 
