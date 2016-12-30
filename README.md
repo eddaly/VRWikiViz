@@ -1,7 +1,7 @@
 # VRWikiViz
 
 - The GoogleVR demo "GVRDemo" with the moving cube and floor panel disabled
-- PubNub https://www.pubnub.com/developers/realtime-data-streams/wikipedia-changes/ example data stream of Wikipedia updates (PubNub Unity library requires UnityTestTools from Asset Store, not included in this repo)
+- PubNub https://www.pubnub.com/developers/realtime-data-streams/wikipedia-changes/ example data stream of Wikipedia updates
 - Each update creates a DataVizObject
 - Which parses the html for usable image files from Wikipedia
 - Display these images, plus some text, on quads moving away from the camera before stopping
