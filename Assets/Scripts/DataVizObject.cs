@@ -363,6 +363,7 @@ no_image:
 		isSelected = false;
 		objectSelected = null;
 		collider.enabled = true;
+		objectHighlighted = null;	// Bit hacky but quick fix to stop holding due to this being set
 	}
 
 	#endregion
