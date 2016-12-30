@@ -12,13 +12,17 @@ public class main : MonoBehaviour {
 	// Use this for initialization
 	void Start () {
 
+		// Connect using pubnub-wikipedia key
 		pubnub = new Pubnub ("demo", "sub-c-b0d14910-0601-11e4-b703-02ee2ddab7fe", "", "", true);
 		//TODO as alternative could edit codepen example of https://wikitech.wikimedia.org/wiki/RCStream webapp (using socket.io 0.9) and publish updates via pubnub JS 
 
+		// Cache the prefab
 		myDataVizObjectPrefab = Resources.Load ("DataVizObject") as GameObject;
 
+		// Initialist the text2speech engine
 		EasyTTSUtil.Initialize (EasyTTSUtil.UnitedKingdom);
 
+		// Test data
 		//StartCoroutine (MakeDataVizTestObjects ());
 	}
 
@@ -29,6 +33,7 @@ public class main : MonoBehaviour {
 	
 	// Update is called once per frame
 	void Update () {
+		// Once connected, subscribe to the stream
 		if (!connected && pubnub != null) {
 			pubnub.Subscribe<string>(
 				"pubnub-wikipedia", 
@@ -77,7 +82,7 @@ public class main : MonoBehaviour {
 							if (dict.ContainsKey ("item") && dict.ContainsKey ("user") && dict.ContainsKey ("link")) {
 								if (!dict.ContainsKey ("country")) {
 									Debug.LogError ("No 'country' data");
-									}
+								}
 
 								// All well
 								MakeDataVizObject (dict);

@@ -15,11 +15,16 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 	private AudioSource audioSource;						// Cached AudioSource component
 
 	static private DataVizObject objectSelected = null;		// Are any DataVizObjects selected?
+	static private DataVizObject objectHighlighted = null;	// Are any DataVizObjects highlighted?
 	private const int maxDataVizObjects = 64;				// Maximum objects allowed (else gets too crowded)
+	static private bool objectLoading = false;				// An object is loading asynchronously
 	static private int allDataVizObjectCount = 0;			// Total count of DataVizObjects
 
 	// Object status flags
+//#define DESTROYONCOLLIDE
+#if DESTROYONCOLLIDE
 	private bool isBeingDestroyed = false;
+#endif
 	private bool isSelected = false;
 	private bool isLoaded = false;
 
@@ -46,6 +51,10 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 		}
 
 		firstFrame = Time.time;	// Used to age objects
+
+		// Object loading flag to prevent unhelpful queueing
+		yield return new WaitWhile (() => objectLoading);
+		objectLoading = true;	
 
 		// Handy copy of audioSource
 		audioSource = gameObject.GetComponent<AudioSource> ();
@@ -180,7 +189,7 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 		txtMesh.text = item;
 	
 		// If an object is selected, hold-on or new ones will get in the way
-		yield return new WaitWhile (()=>(objectSelected != null));
+		yield return new WaitWhile (()=>((objectSelected != null) || (objectHighlighted != null)));
 
 		// Speak the item name
 		EasyTTSUtil.SpeechFlush (item);
@@ -199,10 +208,12 @@ public class DataVizObject: MonoBehaviour, IGvrGazeResponder
 
 		// Made it
 		isLoaded = true;
+		objectLoading = false;
 		yield break;
 
 		// Something went wrong getting the image, so die
 no_image:
+		objectLoading = false;
 		DestroyObject (gameObject);
 	}
 		
@@ -230,6 +241,8 @@ no_image:
 
 	void OnTriggerEnter (Collider other)
 	{
+		return;	// Disabled this as am avoiding overlap when spawn anyway so no longer makes sense
+#if DESTROYONCOLLIDE
 		DataVizObject dvo = other.gameObject.GetComponent<DataVizObject> ();
 
 		if (!isLoaded || !dvo.isLoaded)	// Could still be loading
@@ -257,6 +270,7 @@ no_image:
 			DestroyObject (dvo.gameObject);
 			dvo.isBeingDestroyed = true;
 		}
+#endif
 	}
 
 	// Keey count of all the objects
@@ -278,14 +292,17 @@ no_image:
 		if (objectSelected != null)
 			return;
 
-		// Only if object finished it's journey
-		if (Vector3.Distance (Camera.main.transform.position, transform.position) < 3)
-			return;
+		// Set as the highlighted object
+		objectHighlighted = this;
+
+		// But only update visually if object finished it's journey
+		if (Vector3.Distance (Camera.main.transform.position, transform.position) >= 3) {
 		
-		// Flag selected green and display the text details
-		GetComponent<Renderer>().material.color = Color.green;
-		TextMesh txtMesh = gameObject.GetComponentInChildren<TextMesh>();
-		txtMesh.text = item + "\n" + user + "\n" + link + "\n" + country;
+			// Flag selected green and display the text details
+			GetComponent<Renderer> ().material.color = Color.green;
+			TextMesh txtMesh = gameObject.GetComponentInChildren<TextMesh> ();
+			txtMesh.text = item + "\n" + user + "\n" + link + "\n" + country;
+		}
 	}
 
 	/// Called when the user stops looking on the GameObject, after OnGazeEnter
@@ -298,11 +315,14 @@ no_image:
 		// If this is selected, no need for more
 		if (objectSelected == this)
 			return;
-		
-		// Reset colour and text
-		GetComponent<Renderer>().material.color = Color.white;
-		TextMesh txtMesh = gameObject.GetComponentInChildren<TextMesh> ();
-		txtMesh.text = item;
+
+		// Reset flag colour & text
+		if (objectHighlighted == this) {	//TODO Not sure why necessary
+			objectHighlighted = null;			
+			GetComponent<Renderer> ().material.color = Color.white;
+			TextMesh txtMesh = gameObject.GetComponentInChildren<TextMesh> ();
+			txtMesh.text = item;
+		}
 	}
 
 	/// Called when the viewer's trigger is used, between OnGazeEnter and OnPointerExit.
