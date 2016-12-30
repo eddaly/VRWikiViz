@@ -6,17 +6,14 @@ using PubNubMessaging.Core;
 public class main : MonoBehaviour {
 
 	Pubnub pubnub;
-	public DataStreamCanvas dataStreamCanvas;
 	bool connected = false;
 	GameObject myDataVizObjectPrefab;
 
 	// Use this for initialization
 	void Start () {
 
-		if (dataStreamCanvas == null) {
-			Debug.LogError ("dataSteamCanvas not initialised in Editor");
-		}
 		pubnub = new Pubnub ("demo", "sub-c-b0d14910-0601-11e4-b703-02ee2ddab7fe", "", "", true);
+		//TODO as alternative could edit codepen example of https://wikitech.wikimedia.org/wiki/RCStream webapp (using socket.io 0.9) and publish updates via pubnub JS 
 
 		myDataVizObjectPrefab = Resources.Load ("DataVizObject") as GameObject;
 
@@ -39,6 +36,14 @@ public class main : MonoBehaviour {
 				DisplaySubscribeConnectStatusMessage, 
 				DisplayErrorMessage); 
 			connected = true;
+		}
+	}
+
+	void LateUpdate() {
+		// Support back button means quit convention
+		GvrViewer.Instance.UpdateState ();
+		if (GvrViewer.Instance.BackButtonPressed) {
+			Application.Quit ();
 		}
 	}
 
@@ -124,7 +129,6 @@ public class main : MonoBehaviour {
 		GameObject gameObject = Instantiate (myDataVizObjectPrefab);
 		DataVizObject dataVizObject = gameObject.GetComponent<DataVizObject>();
 		dataVizObject.Init (dict ["item"].ToString (), dict ["user"].ToString (), dict ["link"].ToString (), dict ["country"].ToString ());
-		//dataStreamCanvas.Display (dict ["item"].ToString ());
 	}
 
 	void DisplayErrorMessage(PubnubClientError pubnubError)
@@ -148,7 +152,7 @@ public class main : MonoBehaviour {
 			break;
 		}
 
-		//TODO cope with 122 and 400 (no connection) errors
+		//TODO cope with 122 and 400 (no connection) errors? which happens randomly then go away (net connection is fine)
 
 		UnityEngine.Debug.Log(pubnubError.StatusCode); //Unique ID of the error
 
