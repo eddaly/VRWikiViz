@@ -18,3 +18,6 @@ Tested on:
 
 Note on Wikipedia stream:
 Tried to use socket.io stream https://wikitech.wikimedia.org/wiki/RCStream but this only works with v0.9 of socket.io protocol, whereas socket.io iOS implementation only available for v1. Also tried Socket.IO Unity plugin from AssetStore, which was unhappy with https URL. The pubnub stream may not be supported.
+
+Known issues:
+The pubnub library occassionally reports errors 122 and 400 errors related to no internet connection, despite the connection being present (with Unity WWW loads working fine).
